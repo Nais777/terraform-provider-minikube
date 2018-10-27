@@ -26,6 +26,7 @@ import (
 	pkgutil "k8s.io/minikube/pkg/util"
 	"k8s.io/minikube/pkg/util/kubeconfig"
 	"k8s.io/minikube/pkg/version"
+	"github.com/spf13/viper"
 )
 
 var (
@@ -143,8 +144,8 @@ Valid components are: kubelet, apiserver, controller-manager, etcd, proxy, sched
 			},
 			"iso_url": {
 				Type:        schema.TypeString,
-				Description: "Location of the minikube iso (default \"https://storage.googleapis.com/minikube/iso/minikube-v0.23.5.iso\")",
-				Default:     "https://storage.googleapis.com/minikube/iso/minikube-v0.23.5.iso",
+				Description: "Location of the minikube iso (default \"https://storage.googleapis.com/minikube/iso/minikube-v0.30.0.iso\")",
+				Default:     "https://storage.googleapis.com/minikube/iso/minikube-v0.30.0.iso",
 				ForceNew:    true,
 				Optional:    true,
 			},
@@ -158,8 +159,8 @@ Valid components are: kubelet, apiserver, controller-manager, etcd, proxy, sched
 			"kubernetes_version": {
 				Type: schema.TypeString,
 				Description: `The kubernetes version that the minikube VM will use (ex: v1.2.3)
- OR a URI which contains a localkube binary (ex: https://storage.googleapis.com/minikube/k8sReleases/v1.3.0/localkube-linux-amd64) (default "v1.7.5")`,
-				Default:  "v1.7.5",
+ OR a URI which contains a localkube binary (ex: https://storage.googleapis.com/minikube/k8sReleases/v1.3.0/localkube-linux-amd64) (default "v1.10.0")`,
+				Default:  "v1.10.0",
 				ForceNew: true,
 				Optional: true,
 			},
@@ -197,6 +198,13 @@ Valid components are: kubelet, apiserver, controller-manager, etcd, proxy, sched
 				Default:     "",
 				ForceNew:    true,
 				Optional:    true,
+			},
+			"profile": {
+				Type: schema.TypeString,
+				Description: "The name of the minikube VM being used. This can be modified to allow for multiple minikube instances to be run independently (default \"minikube\")",
+				Default: "minikube",
+				ForceNew: true,
+				Optional: true,
 			},
 			"registry_mirror": {
 				Type:        schema.TypeList,
@@ -296,7 +304,7 @@ func resourceMinikubeRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
-	machineName := "minikube"
+	profile = d.Get("profile").(string)
 	apiserverName := d.Get("apiserver_name").(string)
 	cacheImages := d.Get("cache_images").(bool)
 	containerRuntime := d.Get("container_runtime").(string)
@@ -331,6 +339,8 @@ func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
 	vmDriver := d.Get("vm_driver").(string)
 	xhyveDiskDriver := d.Get("xhyve_disk_driver").(string)
 
+	viper.Set(cfg.MachineProfile, profile)
+
 	flag.Parse()
 	log.Println("=================== Creating Minikube Cluster ==================")
 	k8sVersion := kubernetesVersion
@@ -345,7 +355,7 @@ func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 	defer api.Close()
 
-	exists, err := api.Exists(machineName)
+	exists, err := api.Exists(profile)
 	if err != nil {
 		log.Printf("checking if machine exists: %s", err)
 		return err
@@ -425,14 +435,13 @@ func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
 	kubernetesConfig := cfg.KubernetesConfig{
 		KubernetesVersion:      selectedKubernetesVersion,
 		NodeIP:                 ip,
-		NodeName:               cfg.GetMachineName(),
+		NodeName:               constants.DefaultNodeName,
 		APIServerName:          apiserverName,
 		DNSDomain:              dnsDomain,
 		FeatureGates:           featureGates,
 		ContainerRuntime:       containerRuntime,
 		NetworkPlugin:          networkPlugin,
 		ServiceCIDR:            pkgutil.DefaultServiceCIDR,
-		//ExtraOptions:           extraConfig,
 		ShouldLoadCachedImages: cacheImages,
 	}
 
@@ -492,11 +501,13 @@ func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
 	log.Println("Starting cluster components...")
 
 	if !exists {
+		log.Println("Starting k8s...")
 		if err := k8sBootstrapper.StartCluster(kubernetesConfig); err != nil {
 			log.Printf("Error starting cluster: %v", err)
 			return err
 		}
 	} else {
+		log.Println("Restarting k8s...")
 		if err := k8sBootstrapper.RestartCluster(kubernetesConfig); err != nil {
 			log.Printf("Error restarting cluster: %v", err)
 			return err
@@ -563,7 +574,7 @@ This can also be done automatically by setting the env var CHANGE_MINIKUBE_NONE_
 		log.Println("Unable to load cached images from config file.")
 	}
 
-	d.SetId(machineName)
+	d.SetId(profile)
 
 	client_certificate, err := readFileAsBase64String(kubeCfgSetup.ClientCertificate)
 	if err != nil {

@@ -24,18 +24,18 @@ func Addon() *schema.Resource {
 				Type:        schema.TypeString,
 				Description: "The addon to be enabled",
 				ForceNew:    true,
-				Optional:    false,
+				Required:    true,
 			},
 		},
 	}
 }
 
 func enableAddon(d *schema.ResourceData, meta interface{}) error {
-	providerConfig := meta.(*ProviderConfig)
+	providerConfig := meta.(ProviderConfig)
 	viper.Set(pkgConfig.MachineProfile, providerConfig.Profile)
 
 	addon := d.Get(addonKey).(string)
-
+	log.Println("Enabling addon ", addon)
 	err := config.Set(addon, "true")
 	if err != nil {
 		log.Println("Unable to enable addon: ", err)
@@ -45,10 +45,11 @@ func enableAddon(d *schema.ResourceData, meta interface{}) error {
 }
 
 func readAddon(d *schema.ResourceData, meta interface{}) error {
-	providerConfig := meta.(*ProviderConfig)
+	providerConfig := meta.(ProviderConfig)
 	viper.Set(pkgConfig.MachineProfile, providerConfig.Profile)
 
 	addon := d.Get(addonKey).(string)
+	log.Println("Checking status of addon ", addon)
 
 	val, err := pkgConfig.Get(addon)
 	if err != nil {
@@ -62,10 +63,11 @@ func readAddon(d *schema.ResourceData, meta interface{}) error {
 }
 
 func disableAddon(d *schema.ResourceData, meta interface{}) error {
-	providerConfig := meta.(*ProviderConfig)
+	providerConfig := meta.(ProviderConfig)
 	viper.Set(pkgConfig.MachineProfile, providerConfig.Profile)
 
 	addon := d.Get(addonKey).(string)
+	log.Println("Disabling addon ", addon)
 
 	err := config.Set(addon, "false")
 	if err != nil {

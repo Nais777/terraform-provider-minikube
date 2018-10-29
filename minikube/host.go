@@ -24,7 +24,7 @@ func NewHost(config config.MachineConfig, api libmachine.API) Host {
 	}
 }
 
-func (h Host) Start() error {
+func (h *Host) Start() error {
 	host, err := cluster.StartHost(h.api, h.config)
 	if err != nil {
 		return err
@@ -35,7 +35,7 @@ func (h Host) Start() error {
 	return nil
 }
 
-func (h Host) GetIP() (string, error) {
+func (h *Host) GetIP() (string, error) {
 	ip, err := h.vmInstance.Driver.GetIP()
 	if err != nil {
 		return "", err
@@ -44,7 +44,7 @@ func (h Host) GetIP() (string, error) {
 	return ip, nil
 }
 
-func (h Host) GetURL() (string, error)  {
+func (h *Host) GetURL() (string, error)  {
 	kubeHost, err := h.vmInstance.Driver.GetURL()
 	if err != nil {
 		return "", err

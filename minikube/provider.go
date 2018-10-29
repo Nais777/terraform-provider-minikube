@@ -22,7 +22,8 @@ func Provider() terraform.ResourceProvider {
 		},
 		DataSourcesMap: map[string]*schema.Resource{},
 		ResourcesMap: map[string]*schema.Resource{
-			"minikube": Minikube(),
+			"minikube_instance": Minikube(),
+			"minikube_addon":    Addon(),
 		},
 
 		ConfigureFunc: func(d *schema.ResourceData) (interface{}, error) {

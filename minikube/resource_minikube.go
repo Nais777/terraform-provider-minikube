@@ -29,7 +29,6 @@ import (
 
 var (
 	clusterBootstrapper string = "kubeadm"
-	profile string = "minikube"
 )
 
 func Minikube() *schema.Resource {
@@ -239,7 +238,7 @@ func Minikube() *schema.Resource {
 }
 
 func resourceMinikubeRead(d *schema.ResourceData, meta interface{}) error {
-	providerConfig := meta.(*ProviderConfig)
+	providerConfig := meta.(ProviderConfig)
 	viper.Set(config.MachineProfile, providerConfig.Profile)
 
 	api, err := machine.NewAPIClient()
@@ -297,7 +296,7 @@ func resourceMinikubeRead(d *schema.ResourceData, meta interface{}) error {
 }
 
 func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
-	providerConfig := meta.(*ProviderConfig)
+	providerConfig := meta.(ProviderConfig)
 	viper.Set(config.MachineProfile, providerConfig.Profile)
 	
 	machineConfig, err := getMachineConfig(d)
@@ -305,7 +304,7 @@ func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
 		return err
 	}
 
-	kubernetesConfig := getKubernetesConfig(d)
+	kubernetesConfig := getKubernetesConfig(providerConfig, d)
 
 	log.Println("=================== Creating Minikube Cluster ==================")
 
@@ -320,7 +319,7 @@ func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
 	}
 	defer api.Close()
 
-	exists, err := api.Exists(profile)
+	exists, err := api.Exists(providerConfig.Profile)
 	if err != nil {
 		log.Printf("checking if machine exists: %s", err)
 		return err
@@ -345,7 +344,7 @@ func resourceMinikubeCreate(d *schema.ResourceData, meta interface{}) error {
 		KubernetesConfig: kubernetesConfig,
 	}
 
-	if err := saveConfig(clusterConfig); err != nil {
+	if err := saveConfig(providerConfig, clusterConfig); err != nil {
 		log.Printf("Error saving profile cluster configuration: %v", err)
 	}
 
@@ -468,7 +467,7 @@ This can also be done automatically by setting the env var CHANGE_MINIKUBE_NONE_
 		log.Println("Unable to load cached images from config file.")
 	}
 
-	d.SetId(profile)
+	d.SetId(providerConfig.Profile)
 
 	client_certificate, err := readFileAsBase64String(kubeCfgSetup.ClientCertificate)
 	if err != nil {
@@ -494,7 +493,7 @@ This can also be done automatically by setting the env var CHANGE_MINIKUBE_NONE_
 }
 
 func resourceMinikubeDelete(d *schema.ResourceData, meta interface{}) error {
-	providerConfig := meta.(*ProviderConfig)
+	providerConfig := meta.(ProviderConfig)
 	viper.Set(config.MachineProfile, providerConfig.Profile)
 	
 	log.Println("Deleting local Kubernetes cluster...")
@@ -515,7 +514,7 @@ func resourceMinikubeDelete(d *schema.ResourceData, meta interface{}) error {
 		log.Println("Errors occurred deleting mount process: ", err)
 	}
 
-	if err := os.Remove(constants.GetProfileFile(profile)); err != nil {
+	if err := os.Remove(constants.GetProfileFile(providerConfig.Profile)); err != nil {
 		log.Println("Error deleting machine profile config")
 		return err
 	}
@@ -545,13 +544,13 @@ func loadConfigFromFile(profile string) (config.Config, error) {
 
 // saveConfig saves profile cluster configuration in
 // $MINIKUBE_HOME/profiles/<profilename>/config.json
-func saveConfig(clusterConfig config.Config) error {
+func saveConfig(providerConfig ProviderConfig, clusterConfig config.Config) error {
 	data, err := json.MarshalIndent(clusterConfig, "", "    ")
 	if err != nil {
 		return err
 	}
 
-	profileConfigFile := constants.GetProfileFile(profile)
+	profileConfigFile := constants.GetProfileFile(providerConfig.Profile)
 
 	if err := os.MkdirAll(filepath.Dir(profileConfigFile), 0700); err != nil {
 		return err
@@ -632,7 +631,7 @@ func getMachineConfig(d *schema.ResourceData) (config.MachineConfig, error) {
 	}, nil
 }
 
-func getKubernetesConfig(d *schema.ResourceData) config.KubernetesConfig {
+func getKubernetesConfig(providerConfig ProviderConfig, d *schema.ResourceData) config.KubernetesConfig {
 	kubernetesConfig := config.KubernetesConfig{
 		KubernetesVersion:      d.Get("kubernetes_version").(string),
 		NodeName:               constants.DefaultNodeName,
@@ -646,7 +645,7 @@ func getKubernetesConfig(d *schema.ResourceData) config.KubernetesConfig {
 	}
 
 	// Load profile cluster config from file
-	cc, err := loadConfigFromFile(profile)
+	cc, err := loadConfigFromFile(providerConfig.Profile)
 	if err != nil && !os.IsNotExist(err) {
 		log.Printf("Error loading profile config: %v", err)
 	}
